@@ -1,4 +1,4 @@
-# char-rnn-keras
+# book-genre
 
 Multi-layer recurrent neural networks for detecting a book category, inspired by [Andrej Karpathy's article](http://karpathy.github.io/2015/05/21/rnn-effectiveness) and the original torch source code [karpathy/char-rnn](https://github.com/karpathy/char-rnn), as well as [Eric Zhang char-rnn-keras implementation](https://github.com/ekzhang/char-rnn-keras).
 
