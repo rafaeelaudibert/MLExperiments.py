@@ -15,13 +15,13 @@ from yattag import Doc, indent
 # Custom code
 from model import build_model, load_weights, build_model
 
-# Default initializations
-doc, tag, text, line = Doc().ttl()       # Get HTML creation variables
+# Default initialization
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable TF debugging information
 
 # Constants
 DATA_DIR = './data'
 MODEL_DIR = './model'
+HTML_DIR = './html'
 TRUNCATE_SIZE = 64
 FILL_CARACHTER = '|'
 FILLING = FILL_CARACHTER * TRUNCATE_SIZE
@@ -94,35 +94,41 @@ def sample(epoch, seed, generateHTML=False, debug=False):
 
         # Build the model with all the outputs for the HTML generation
         print_debug('Loading new model from file with all output layers', debug)
-        layer_dict = [layer.name for layer in model.layers]
+        layer_dict = {layer.name: layer for layer in model.layers}
         outputs = [layer.output for layer in model.layers]
         activation_model = Model(inputs=model.input, outputs=outputs)
         load_weights(epoch, activation_model)
 
-        # Proper HTML generation
-        print_debug('Starting to create HTML file', debug)
-        with open('activation_1.html', 'w') as f:
-            with tag('html'):
-                doc.asis('<link rel="stylesheet" href="main.css">')
-                doc.asis('<link href="https://fonts.googleapis.com/css?family=Muli" rel="stylesheet">')
-                with tag('body'):
+        if not os.path.exists(HTML_DIR):
+            os.makedirs(HTML_DIR)
 
-                    # Each neuron
-                    for i in range(32):
-                        print_debug('Iterating neuron {}'.format(i), debug)
-                        with tag('p'):  
-                            line('span', 'Neuron {:03d} - '.format(i + 1))
-                            for c in seed:
-                                batch = np.zeros((1, 1))
-                                batch[0, 0] = char_to_idx[c]
-                                activations.append({layer_dict[i]: activation for (i, activation) in enumerate(activation_model.predict_on_batch(batch))})            
-                                
-                                # Fetching neuron and normalizing it value in the klass
-                                neuron = activations[-1]['activation_1'].squeeze()[i]   
-                                line('span', c, klass=generate_class(neuron * 0.5 + 0.5))
-                
+        # Proper HTML generation
+        for layer_name in layer_dict:            
+            doc, tag, _, line = Doc().ttl()       # Get HTML creation variables
+
+            print_debug('Starting to create {} HTML file'.format(layer_name), debug)
+            with open('{}/{}.html'.format(HTML_DIR, layer_name), 'w') as f:
+                with tag('html'):
+                    doc.asis('<link rel="stylesheet" href="main.css">')
+                    doc.asis('<link href="https://fonts.googleapis.com/css?family=Muli" rel="stylesheet">')
+                    with tag('body'):
+                        # Each neuron
+                        for i in range(layer_dict[layer_name].output.shape[-1]):
+                            print_debug('Iterating neuron {}'.format(i), debug)
+                            with tag('p'):  
+                                line('span', 'Neuron {:03d} - '.format(i + 1))
+                                for c in seed:
+                                    batch = np.zeros((1, 1))
+                                    batch[0, 0] = char_to_idx[c]
+                                    activations.append({list(layer_dict.keys())[i]: activation for (i, activation) in enumerate(activation_model.predict_on_batch(batch))})            
+                                    
+                                    # Fetching neuron and normalizing it value in the klass
+                                    neuron = activations[-1][layer_name].squeeze()[i]   
+                                    line('span', c, klass=generate_class(neuron * 0.5 + 0.5))
+                    
                 # Write HTML to the file
                 f.write(doc.getvalue())
+                print_debug('{} HTML file created'.format(layer_name), debug)
     
     # Sort the result and returns it
     sorted_result = sorted(result, key=lambda x: x[1], reverse=True)    

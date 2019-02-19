@@ -1,0 +1,53 @@
+body {
+    font-family: 'Muli', sans-serif;
+}
+
+._10 {
+    background-color: rgba(132, 200, 227, 1);
+    color: black;
+}
+
+._20 {
+    background-color: rgba(132, 200, 227, .75);
+    color: black;
+}
+
+._30 {
+    background-color: rgba(132, 200, 227, .5);
+    color: black;
+}
+
+._40 {
+    background-color: rgba(132, 200, 227, .25);
+    color: black;
+}
+
+._50 {
+    background-color: rgba(132, 200, 227, 0.1);
+    color: black;
+}
+
+._60 {
+    background-color: rgba(218, 104, 104, 0.1);
+    color: black;
+}
+
+._70 {
+    background-color: rgba(218, 104, 104, 0.25);
+    color: black;
+}
+
+._80 {
+    background-color: rgba(218, 104, 104, 0.5);
+    color: black;
+}
+
+._90 {
+    background-color: rgba(218, 104, 104, 0.75);
+    color: black;
+}
+
+._100 {
+    background-color: rgba(218, 104, 104, 1);
+    color: black;
+}
