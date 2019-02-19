@@ -1,70 +1,147 @@
+# Libraries/Core modules
 import argparse
 import json
 import os
-from pathlib import Path
-
 import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from pathlib import Path
 from keras.models import Sequential, load_model
-from keras.layers import LSTM, Dropout, TimeDistributed, Dense, Activation, Embedding
+from keras.layers import LSTM, Dropout, Dense, Activation, Embedding
+from pprint import pprint
+from keras.models import Model
+from yattag import Doc, indent
 
-from model import build_model, load_weights
+# Custom code
+from model import build_model, load_weights, build_model
 
+# Default initializations
+doc, tag, text, line = Doc().ttl()       # Get HTML creation variables
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable TF debugging information
+
+# Constants
 DATA_DIR = './data'
 MODEL_DIR = './model'
 TRUNCATE_SIZE = 64
 FILL_CARACHTER = '|'
 FILLING = FILL_CARACHTER * TRUNCATE_SIZE
 
-def build_sample_model(vocab_size, output_size):
-    model = Sequential()
-    model.add(Embedding(vocab_size, 128, batch_input_shape=(1, 1)))
-    for i in range(2):
-        model.add(LSTM(128, return_sequences=(i != 1), stateful=True))
-        model.add(Dropout(0.2))
+# Print a value based on a conditional
+def print_debug(message, condition):
+    if condition:
+        pprint(message)
 
-    model.add(Dense(output_size))
-    model.add(Activation('softmax'))
-    return model
+# Generate classes for the HTML document
+def generate_class(normalized_value):
+    if normalized_value < 0.10:
+        return "_10"
+    elif normalized_value < 0.20:
+        return "_20"
+    elif normalized_value < 0.30:
+        return "_30"
+    elif normalized_value < 0.40:
+        return "_40"
+    elif normalized_value < 0.50:
+        return "_50"
+    elif normalized_value < 0.60:
+        return "_60"
+    elif normalized_value < 0.70:
+        return "_70"
+    elif normalized_value < 0.80:
+        return "_80"
+    elif normalized_value < 0.90:
+        return "_90"
+    else:
+        return "_100"
 
-def sample(epoch, header):
+def sample(epoch, seed, generateHTML=False, debug=False):
 
-    header = (header + FILLING)[:TRUNCATE_SIZE]
+    # Configure the seed with the filling
+    seed = (seed + FILLING)[:TRUNCATE_SIZE]
     
+    # Fetch the file with the genres dataset
+    print_debug('Fetching genres.json file', debug)
     with open(os.path.join(DATA_DIR, 'genres.json'), 'r') as f:
         genre_to_idx = json.load(f)
-        idx_to_genre = { i: ch for (ch, i) in list(genre_to_idx.items()) }
-    
+        idx_to_genre = { i: ch for (ch, i) in list(genre_to_idx.items()) }    
+        output_size = len(idx_to_genre)
 
-    c2ifile = Path(MODEL_DIR).joinpath('char_to_idx.json')
-    with c2ifile.open('r') as f:
+    # Fetch the file with the char-to-index dataset
+    print_debug('Fetching char_to_idx.json file', debug)
+    with open(os.path.join(MODEL_DIR, 'char_to_idx.json'), 'r') as f:
             char_to_idx = json.load(f)
             idx_to_char = {i: ch for (i, ch) in enumerate(char_to_idx)}
-    
-    vocab_size = len(idx_to_char)
-    output_size = len(idx_to_genre)
+            vocab_size = len(idx_to_char)
+        
 
-    model = build_sample_model(vocab_size, output_size)
+    # Build the normal model
+    print_debug('Loading model from file', debug)
+    model = build_model(1, 1, vocab_size, output_size)
     load_weights(epoch, model)
     model.save(os.path.join(MODEL_DIR, 'model.{}.h5'.format(epoch)))
-   
 
-    # Iterating through all the carachters, except the last one,
-    # to make the RNN to "remember" about the seed text
-    for c in header:
+    # Predict the result
+    print_debug('Running results prediction', debug)
+    activations = []
+    for c in seed:
         batch = np.zeros((1, 1))
         batch[0, 0] = char_to_idx[c]
-        result = model.predict_on_batch(batch).ravel()
+        result = [(idx_to_genre[i], prob) for (i, prob) in enumerate(model.predict_on_batch(batch).ravel())]
+     
+    # HTML Generation
+    if generateHTML:
+        print_debug('Starting HTML generation', not debug)
 
-    print({idx_to_genre[i]: prob for (i, prob) in sorted(enumerate(result), key=lambda x: x[1], reverse=True)})
-    ordered = [idx_to_genre[i] for (i, prob) in sorted(enumerate(result), key=lambda x: x[1], reverse=True)]
+        # Build the model with all the outputs for the HTML generation
+        print_debug('Loading new model from file with all output layers', debug)
+        layer_dict = [layer.name for layer in model.layers]
+        outputs = [layer.output for layer in model.layers]
+        activation_model = Model(inputs=model.input, outputs=outputs)
+        load_weights(epoch, activation_model)
+
+        # Proper HTML generation
+        print_debug('Starting to create HTML file', debug)
+        with open('activation_1.html', 'w') as f:
+            with tag('html'):
+                doc.asis('<link rel="stylesheet" href="main.css">')
+                doc.asis('<link href="https://fonts.googleapis.com/css?family=Muli" rel="stylesheet">')
+                with tag('body'):
+
+                    # Each neuron
+                    for i in range(32):
+                        print_debug('Iterating neuron {}'.format(i), debug)
+                        with tag('p'):  
+                            line('span', 'Neuron {:03d} - '.format(i + 1))
+                            for c in seed:
+                                batch = np.zeros((1, 1))
+                                batch[0, 0] = char_to_idx[c]
+                                activations.append({layer_dict[i]: activation for (i, activation) in enumerate(activation_model.predict_on_batch(batch))})            
+                                
+                                # Fetching neuron and normalizing it value in the klass
+                                neuron = activations[-1]['activation_1'].squeeze()[i]   
+                                line('span', c, klass=generate_class(neuron * 0.5 + 0.5))
+                
+                # Write HTML to the file
+                f.write(doc.getvalue())
     
-    return ordered[0]
+    # Sort the result and returns it
+    sorted_result = sorted(result, key=lambda x: x[1], reverse=True)    
+    print_debug(sorted_result, debug)
+    return sorted_result
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sample some text from the trained model.')
-    parser.add_argument('--epoch', type=int, default=150, help='epoch checkpoint to sample from (default 100)')
+    parser.add_argument('--epoch', type=int, default=150, help='epoch checkpoint to sample from (default 150)')
     parser.add_argument('--seed', default='', help='initial seed for the generated text')
+    parser.add_argument('--html', dest='html', action='store_true')
+    parser.add_argument('--pprint', dest='pprint', action='store_true')
+    parser.set_defaults(html=False, pprint=False)
     args = parser.parse_args()
 
-    category = sample(args.epoch, args.seed)
-    print(category)
+    result = sample(args.epoch, args.seed, args.html, args.pprint)
+    print("This book belongs to the {} category with {:02.2f}% confidence".format(result[0][0], result[0][1] * 100))
+    for extra_results in result[1:]:
+        if extra_results[1] > 0.10:
+            print("It might also belongs to the {} category with {:02.2f}% confidence".format(extra_results[0], extra_results[1] * 100))
+        pass
+    
