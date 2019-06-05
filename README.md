@@ -5,3 +5,4 @@ This is my repository to some machine learning explorations using Tensorflow and
 ## Brief folder description
 
 * [Book Genre](./book-genre) - Detect a book category using only his title and author name
+* [Mnist Gan](./mnist-gan) - Basic GAN to generate MNIST-like digits
